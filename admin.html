@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PSP Admin | Testimonial Approvals</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Public+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#FAF7F0; --ink:#132433; --ink-soft:#4A5A67; --navy:#0F2A3D; --navy-2:#1B4258;
+    --gold:#E2A63B; --gold-deep:#C9862A; --line:rgba(19,36,51,0.12);
+    --display:'Space Grotesk', sans-serif; --body:'Public Sans', sans-serif; --mono:'JetBrains Mono', monospace;
+  }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  body{ font-family:var(--body); background:var(--bg); color:var(--ink); min-height:100vh; }
+  .wrap{ max-width:960px; margin:0 auto; padding:50px 24px 100px; }
+  h1{ font-family:var(--display); font-size:28px; color:var(--navy); margin-bottom:6px; }
+  .sub{ color:var(--ink-soft); font-size:14.5px; margin-bottom:36px; }
+
+  /* Login gate */
+  #loginGate{ max-width:380px; margin:80px auto; background:#fff; border:1px solid var(--line); padding:40px; text-align:center; }
+  #loginGate h2{ font-family:var(--display); font-size:20px; color:var(--navy); margin-bottom:20px; }
+  #loginGate input{ width:100%; padding:12px 14px; border:1px solid var(--line); font-size:15px; margin-bottom:14px; }
+  #loginGate button{ width:100%; padding:12px; background:var(--gold); color:var(--navy); font-weight:700; border:none; cursor:pointer; font-size:14.5px; }
+  #loginGate button:hover{ background:var(--gold-deep); }
+  #loginError{ color:#C0392B; font-size:13.5px; margin-top:10px; display:none; }
+
+  #dashboard{ display:none; }
+  .tabs{ display:flex; gap:8px; margin-bottom:28px; border-bottom:1px solid var(--line); }
+  .tab{ padding:10px 18px; font-size:13.5px; font-weight:600; color:var(--ink-soft); cursor:pointer; border-bottom:2px solid transparent; }
+  .tab.active{ color:var(--navy); border-color:var(--gold); }
+
+  .card{ background:#fff; border:1px solid var(--line); padding:22px 24px; margin-bottom:14px; }
+  .card-top{ display:flex; justify-content:space-between; align-items:flex-start; gap:14px; flex-wrap:wrap; }
+  .card-name{ font-family:var(--display); font-weight:600; font-size:16px; color:var(--navy); }
+  .card-meta{ font-size:13px; color:var(--ink-soft); margin-top:2px; }
+  .card-stars{ color:var(--gold-deep); font-size:14px; letter-spacing:1px; }
+  .card-msg{ font-size:14.5px; color:var(--ink-soft); margin-top:12px; line-height:1.6; }
+  .card-actions{ display:flex; gap:10px; margin-top:16px; }
+  .btn{ padding:9px 16px; font-size:13px; font-weight:700; border:none; cursor:pointer; }
+  .btn-approve{ background:var(--navy); color:#fff; }
+  .btn-approve:hover{ background:var(--navy-2); }
+  .btn-reject{ background:transparent; color:#C0392B; border:1px solid #C0392B; }
+  .btn-reject:hover{ background:#C0392B; color:#fff; }
+  .btn-delete{ background:transparent; color:var(--ink-soft); border:1px solid var(--line); }
+  .status-badge{ font-family:var(--mono); font-size:10.5px; text-transform:uppercase; letter-spacing:0.06em; padding:4px 9px; border-radius:20px; }
+  .status-pending{ background:#FFF3D6; color:#9A6A0C; }
+  .status-approved{ background:#E1F3E5; color:#1F7A3C; }
+  .status-rejected{ background:#FBE3E1; color:#B23A2E; }
+  .empty{ text-align:center; padding:60px 0; color:var(--ink-soft); font-size:14.5px; }
+</style>
+</head>
+<body>
+
+<div id="loginGate">
+  <h2>PSP Admin Login</h2>
+  <input type="password" id="passwordInput" placeholder="Enter admin password">
+  <button id="loginBtn">Login</button>
+  <p id="loginError">Incorrect password. Please try again.</p>
+</div>
+
+<div id="dashboard" class="wrap">
+  <h1>Testimonial Approvals</h1>
+  <p class="sub">Review submissions from the website and approve the ones you'd like to show publicly.</p>
+
+  <div class="tabs">
+    <div class="tab active" data-tab="pending">Pending</div>
+    <div class="tab" data-tab="approved">Approved</div>
+    <div class="tab" data-tab="rejected">Rejected</div>
+  </div>
+
+  <div id="list"></div>
+</div>
+
+<script>
+  let adminPassword = '';
+  let allTestimonials = [];
+  let activeTab = 'pending';
+
+  const loginGate = document.getElementById('loginGate');
+  const dashboard = document.getElementById('dashboard');
+  const loginError = document.getElementById('loginError');
+
+  document.getElementById('loginBtn').addEventListener('click', attemptLogin);
+  document.getElementById('passwordInput').addEventListener('keydown', (e)=>{ if(e.key === 'Enter') attemptLogin(); });
+
+  async function attemptLogin(){
+    const pw = document.getElementById('passwordInput').value;
+    const res = await fetch('/api/admin/testimonials', { headers: { 'x-admin-password': pw } });
+    if(res.status === 401){
+      loginError.style.display = 'block';
+      return;
+    }
+    adminPassword = pw;
+    loginGate.style.display = 'none';
+    dashboard.style.display = 'block';
+    loadData();
+  }
+
+  document.querySelectorAll('.tab').forEach(tab=>{
+    tab.addEventListener('click', ()=>{
+      document.querySelectorAll('.tab').forEach(t=> t.classList.remove('active'));
+      tab.classList.add('active');
+      activeTab = tab.dataset.tab;
+      render();
+    });
+  });
+
+  async function loadData(){
+    const res = await fetch('/api/admin/testimonials', { headers: { 'x-admin-password': adminPassword } });
+    allTestimonials = await res.json();
+    render();
+  }
+
+  function render(){
+    const list = document.getElementById('list');
+    const filtered = allTestimonials.filter(t => t.status === activeTab);
+    if(filtered.length === 0){
+      list.innerHTML = `<div class="empty">No ${activeTab} testimonials.</div>`;
+      return;
+    }
+    list.innerHTML = filtered.map(t => `
+      <div class="card">
+        <div class="card-top">
+          <div>
+            <div class="card-name">${escapeHTML(t.name)}</div>
+            <div class="card-meta">${escapeHTML(t.city || '—')} · ${new Date(t.createdAt).toLocaleDateString()}</div>
+          </div>
+          <div style="text-align:right;">
+            <div class="card-stars">${'★'.repeat(t.rating || 0)}${'☆'.repeat(5 - (t.rating || 0))}</div>
+            <span class="status-badge status-${t.status}">${t.status}</span>
+          </div>
+        </div>
+        <div class="card-msg">"${escapeHTML(t.message)}"</div>
+        <div class="card-actions">
+          ${t.status !== 'approved' ? `<button class="btn btn-approve" onclick="updateStatus('${t.id}','approve')">Approve</button>` : ''}
+          ${t.status !== 'rejected' ? `<button class="btn btn-reject" onclick="updateStatus('${t.id}','reject')">Reject</button>` : ''}
+          <button class="btn btn-delete" onclick="deleteTestimonial('${t.id}')">Delete</button>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  async function updateStatus(id, action){
+    await fetch(`/api/admin/testimonials/${id}/${action}`, {
+      method: 'POST',
+      headers: { 'x-admin-password': adminPassword }
+    });
+    loadData();
+  }
+
+  async function deleteTestimonial(id){
+    if(!confirm('Permanently delete this testimonial?')) return;
+    await fetch(`/api/admin/testimonials/${id}`, {
+      method: 'DELETE',
+      headers: { 'x-admin-password': adminPassword }
+    });
+    loadData();
+  }
+
+  function escapeHTML(str){
+    const div = document.createElement('div');
+    div.textContent = str || '';
+    return div.innerHTML;
+  }
+</script>
+</body>
+</html>
