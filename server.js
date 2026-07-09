@@ -11,7 +11,7 @@ const PORT = process.env.PORT || 3000;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'changeme123';
 
 app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(__dirname));
 
 function checkAdminAuth(req, res, next) {
   const password = req.headers['x-admin-password'] || req.query.password;
