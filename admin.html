@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>PSP Admin | Testimonial Approvals</title>
+<title>PSP Admin</title>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Public+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
   :root{
@@ -15,7 +15,7 @@
   body{ font-family:var(--body); background:var(--bg); color:var(--ink); min-height:100vh; }
   .wrap{ max-width:960px; margin:0 auto; padding:50px 24px 100px; }
   h1{ font-family:var(--display); font-size:28px; color:var(--navy); margin-bottom:6px; }
-  .sub{ color:var(--ink-soft); font-size:14.5px; margin-bottom:36px; }
+  .sub{ color:var(--ink-soft); font-size:14.5px; margin-bottom:30px; }
 
   /* Login gate */
   #loginGate{ max-width:380px; margin:80px auto; background:#fff; border:1px solid var(--line); padding:40px; text-align:center; }
@@ -26,6 +26,17 @@
   #loginError{ color:#C0392B; font-size:13.5px; margin-top:10px; display:none; }
 
   #dashboard{ display:none; }
+
+  /* Section switcher (Testimonials / Leads) */
+  .section-switch{ display:flex; gap:10px; margin-bottom:34px; }
+  .section-btn{
+    padding:11px 20px; font-size:13.5px; font-weight:700; color:var(--ink-soft);
+    background:#fff; border:1px solid var(--line); cursor:pointer; border-radius:30px;
+  }
+  .section-btn.active{ background:var(--navy); color:#fff; border-color:var(--navy); }
+  .section-view{ display:none; }
+  .section-view.active{ display:block; }
+
   .tabs{ display:flex; gap:8px; margin-bottom:28px; border-bottom:1px solid var(--line); }
   .tab{ padding:10px 18px; font-size:13.5px; font-weight:600; color:var(--ink-soft); cursor:pointer; border-bottom:2px solid transparent; }
   .tab.active{ color:var(--navy); border-color:var(--gold); }
@@ -36,18 +47,23 @@
   .card-meta{ font-size:13px; color:var(--ink-soft); margin-top:2px; }
   .card-stars{ color:var(--gold-deep); font-size:14px; letter-spacing:1px; }
   .card-msg{ font-size:14.5px; color:var(--ink-soft); margin-top:12px; line-height:1.6; }
-  .card-actions{ display:flex; gap:10px; margin-top:16px; }
+  .card-actions{ display:flex; gap:10px; margin-top:16px; flex-wrap:wrap; }
   .btn{ padding:9px 16px; font-size:13px; font-weight:700; border:none; cursor:pointer; }
   .btn-approve{ background:var(--navy); color:#fff; }
   .btn-approve:hover{ background:var(--navy-2); }
   .btn-reject{ background:transparent; color:#C0392B; border:1px solid #C0392B; }
   .btn-reject:hover{ background:#C0392B; color:#fff; }
+  .btn-contacted{ background:#2E6B8A; color:#fff; }
+  .btn-close{ background:transparent; color:var(--ink-soft); border:1px solid var(--line); }
   .btn-delete{ background:transparent; color:var(--ink-soft); border:1px solid var(--line); }
   .status-badge{ font-family:var(--mono); font-size:10.5px; text-transform:uppercase; letter-spacing:0.06em; padding:4px 9px; border-radius:20px; }
-  .status-pending{ background:#FFF3D6; color:#9A6A0C; }
-  .status-approved{ background:#E1F3E5; color:#1F7A3C; }
+  .status-pending, .status-new{ background:#FFF3D6; color:#9A6A0C; }
+  .status-approved, .status-contacted{ background:#E1F3E5; color:#1F7A3C; }
   .status-rejected{ background:#FBE3E1; color:#B23A2E; }
+  .status-closed{ background:#E7E7E7; color:#555; }
   .empty{ text-align:center; padding:60px 0; color:var(--ink-soft); font-size:14.5px; }
+  .lead-contact{ font-size:13.5px; color:var(--ink-soft); margin-top:6px; }
+  .lead-contact a{ color:var(--navy-2); text-decoration:underline; }
 </style>
 </head>
 <body>
@@ -60,22 +76,42 @@
 </div>
 
 <div id="dashboard" class="wrap">
-  <h1>Testimonial Approvals</h1>
-  <p class="sub">Review submissions from the website and approve the ones you'd like to show publicly.</p>
+  <h1 id="pageTitle">Admin Dashboard</h1>
+  <p class="sub" id="pageSub">Manage testimonials and consultation requests from your website.</p>
 
-  <div class="tabs">
-    <div class="tab active" data-tab="pending">Pending</div>
-    <div class="tab" data-tab="approved">Approved</div>
-    <div class="tab" data-tab="rejected">Rejected</div>
+  <div class="section-switch">
+    <button class="section-btn active" data-section="leads">Consultation Requests</button>
+    <button class="section-btn" data-section="testimonials">Testimonials</button>
   </div>
 
-  <div id="list"></div>
+  <!-- LEADS SECTION -->
+  <div class="section-view active" id="leadsSection">
+    <div class="tabs">
+      <div class="tab active" data-leadtab="new">New</div>
+      <div class="tab" data-leadtab="contacted">Contacted</div>
+      <div class="tab" data-leadtab="closed">Closed</div>
+    </div>
+    <div id="leadList"></div>
+  </div>
+
+  <!-- TESTIMONIALS SECTION -->
+  <div class="section-view" id="testimonialsSection">
+    <div class="tabs">
+      <div class="tab active" data-testitab="pending">Pending</div>
+      <div class="tab" data-testitab="approved">Approved</div>
+      <div class="tab" data-testitab="rejected">Rejected</div>
+    </div>
+    <div id="testiList"></div>
+  </div>
 </div>
 
 <script>
   let adminPassword = '';
   let allTestimonials = [];
-  let activeTab = 'pending';
+  let allLeads = [];
+  let activeTestiTab = 'pending';
+  let activeLeadTab = 'new';
+  let activeSection = 'leads';
 
   const loginGate = document.getElementById('loginGate');
   const dashboard = document.getElementById('dashboard');
@@ -86,7 +122,7 @@
 
   async function attemptLogin(){
     const pw = document.getElementById('passwordInput').value;
-    const res = await fetch('/api/admin/testimonials', { headers: { 'x-admin-password': pw } });
+    const res = await fetch('/api/admin/leads', { headers: { 'x-admin-password': pw } });
     if(res.status === 401){
       loginError.style.display = 'block';
       return;
@@ -94,29 +130,110 @@
     adminPassword = pw;
     loginGate.style.display = 'none';
     dashboard.style.display = 'block';
-    loadData();
+    loadLeads();
+    loadTestimonials();
   }
 
-  document.querySelectorAll('.tab').forEach(tab=>{
-    tab.addEventListener('click', ()=>{
-      document.querySelectorAll('.tab').forEach(t=> t.classList.remove('active'));
-      tab.classList.add('active');
-      activeTab = tab.dataset.tab;
-      render();
+  // ---------- section switcher ----------
+  document.querySelectorAll('.section-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.section-btn').forEach(b=> b.classList.remove('active'));
+      btn.classList.add('active');
+      activeSection = btn.dataset.section;
+      document.getElementById('leadsSection').classList.toggle('active', activeSection === 'leads');
+      document.getElementById('testimonialsSection').classList.toggle('active', activeSection === 'testimonials');
     });
   });
 
-  async function loadData(){
-    const res = await fetch('/api/admin/testimonials', { headers: { 'x-admin-password': adminPassword } });
-    allTestimonials = await res.json();
-    render();
+  // ---------- leads ----------
+  document.querySelectorAll('[data-leadtab]').forEach(tab=>{
+    tab.addEventListener('click', ()=>{
+      document.querySelectorAll('[data-leadtab]').forEach(t=> t.classList.remove('active'));
+      tab.classList.add('active');
+      activeLeadTab = tab.dataset.leadtab;
+      renderLeads();
+    });
+  });
+
+  async function loadLeads(){
+    const res = await fetch('/api/admin/leads', { headers: { 'x-admin-password': adminPassword } });
+    allLeads = await res.json();
+    renderLeads();
   }
 
-  function render(){
-    const list = document.getElementById('list');
-    const filtered = allTestimonials.filter(t => t.status === activeTab);
+  function renderLeads(){
+    const list = document.getElementById('leadList');
+    const filtered = allLeads.filter(l => l.status === activeLeadTab);
     if(filtered.length === 0){
-      list.innerHTML = `<div class="empty">No ${activeTab} testimonials.</div>`;
+      list.innerHTML = `<div class="empty">No ${activeLeadTab} requests.</div>`;
+      return;
+    }
+    list.innerHTML = filtered.map(l => `
+      <div class="card">
+        <div class="card-top">
+          <div>
+            <div class="card-name">${escapeHTML(l.name)}</div>
+            <div class="card-meta">${escapeHTML(l.city || '—')} · ${new Date(l.createdAt).toLocaleString()}</div>
+            <div class="lead-contact">
+              📞 <a href="tel:${escapeHTML(l.phone)}">${escapeHTML(l.phone)}</a>
+              &nbsp;·&nbsp;
+              💬 <a href="https://wa.me/91${escapeHTML(l.phone.replace(/\\D/g,'').slice(-10))}" target="_blank">WhatsApp</a>
+              ${l.email ? `&nbsp;·&nbsp;✉️ ${escapeHTML(l.email)}` : ''}
+            </div>
+          </div>
+          <span class="status-badge status-${l.status}">${l.status}</span>
+        </div>
+        ${l.service ? `<div class="card-msg"><strong>Service:</strong> ${escapeHTML(l.service)}</div>` : ''}
+        ${l.message ? `<div class="card-msg">"${escapeHTML(l.message)}"</div>` : ''}
+        <div class="card-actions">
+          ${l.status !== 'contacted' ? `<button class="btn btn-contacted" onclick="updateLeadStatus('${l.id}','contacted')">Mark Contacted</button>` : ''}
+          ${l.status !== 'closed' ? `<button class="btn btn-close" onclick="updateLeadStatus('${l.id}','closed')">Close</button>` : ''}
+          ${l.status !== 'new' ? `<button class="btn btn-close" onclick="updateLeadStatus('${l.id}','new')">Reopen</button>` : ''}
+          <button class="btn btn-delete" onclick="deleteLead('${l.id}')">Delete</button>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  async function updateLeadStatus(id, status){
+    await fetch(`/api/admin/leads/${id}/status`, {
+      method: 'POST',
+      headers: { 'x-admin-password': adminPassword, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status })
+    });
+    loadLeads();
+  }
+
+  async function deleteLead(id){
+    if(!confirm('Permanently delete this request?')) return;
+    await fetch(`/api/admin/leads/${id}`, {
+      method: 'DELETE',
+      headers: { 'x-admin-password': adminPassword }
+    });
+    loadLeads();
+  }
+
+  // ---------- testimonials ----------
+  document.querySelectorAll('[data-testitab]').forEach(tab=>{
+    tab.addEventListener('click', ()=>{
+      document.querySelectorAll('[data-testitab]').forEach(t=> t.classList.remove('active'));
+      tab.classList.add('active');
+      activeTestiTab = tab.dataset.testitab;
+      renderTestimonials();
+    });
+  });
+
+  async function loadTestimonials(){
+    const res = await fetch('/api/admin/testimonials', { headers: { 'x-admin-password': adminPassword } });
+    allTestimonials = await res.json();
+    renderTestimonials();
+  }
+
+  function renderTestimonials(){
+    const list = document.getElementById('testiList');
+    const filtered = allTestimonials.filter(t => t.status === activeTestiTab);
+    if(filtered.length === 0){
+      list.innerHTML = `<div class="empty">No ${activeTestiTab} testimonials.</div>`;
       return;
     }
     list.innerHTML = filtered.map(t => `
@@ -133,20 +250,20 @@
         </div>
         <div class="card-msg">"${escapeHTML(t.message)}"</div>
         <div class="card-actions">
-          ${t.status !== 'approved' ? `<button class="btn btn-approve" onclick="updateStatus('${t.id}','approve')">Approve</button>` : ''}
-          ${t.status !== 'rejected' ? `<button class="btn btn-reject" onclick="updateStatus('${t.id}','reject')">Reject</button>` : ''}
+          ${t.status !== 'approved' ? `<button class="btn btn-approve" onclick="updateTestiStatus('${t.id}','approve')">Approve</button>` : ''}
+          ${t.status !== 'rejected' ? `<button class="btn btn-reject" onclick="updateTestiStatus('${t.id}','reject')">Reject</button>` : ''}
           <button class="btn btn-delete" onclick="deleteTestimonial('${t.id}')">Delete</button>
         </div>
       </div>
     `).join('');
   }
 
-  async function updateStatus(id, action){
+  async function updateTestiStatus(id, action){
     await fetch(`/api/admin/testimonials/${id}/${action}`, {
       method: 'POST',
       headers: { 'x-admin-password': adminPassword }
     });
-    loadData();
+    loadTestimonials();
   }
 
   async function deleteTestimonial(id){
@@ -155,7 +272,7 @@
       method: 'DELETE',
       headers: { 'x-admin-password': adminPassword }
     });
-    loadData();
+    loadTestimonials();
   }
 
   function escapeHTML(str){
