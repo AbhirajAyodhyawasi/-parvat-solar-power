@@ -2,12 +2,13 @@ const fs = require('fs');
 const path = require('path');
 const { MongoClient } = require('mongodb');
 
-const DATA_FILE = path.join(__dirname, 'data', 'testimonials.json');
+const DATA_DIR = path.join(__dirname, 'data');
 const MONGO_URI = process.env.MONGODB_URI;
 
-let mongoCollection = null;
+let mongoDb = null;
+const collections = {}; // cache of mongo collection handles, keyed by name
 
-const SEED_DATA = [
+const TESTIMONIAL_SEED = [
   {
     id: 'seed-1', name: 'Surya Pratap Singh', city: 'Lucknow', rating: 5,
     message: "The technicians arrived on schedule and completed the installation in a single day. The system looks clean and works perfectly. Worth every penny.",
@@ -30,77 +31,93 @@ const SEED_DATA = [
   }
 ];
 
+const SEEDS = {
+  testimonials: TESTIMONIAL_SEED,
+  leads: []
+};
+
+function dataFile(name) {
+  return path.join(DATA_DIR, `${name}.json`);
+}
+
 // ---------- init ----------
 async function initStorage() {
   if (MONGO_URI) {
     const client = new MongoClient(MONGO_URI);
     await client.connect();
-    const db = client.db('parvat_solar');
-    mongoCollection = db.collection('testimonials');
-    const count = await mongoCollection.countDocuments();
-    if (count === 0) {
-      await mongoCollection.insertMany(SEED_DATA);
+    mongoDb = client.db('parvat_solar');
+    for (const name of Object.keys(SEEDS)) {
+      const col = mongoDb.collection(name);
+      collections[name] = col;
+      const count = await col.countDocuments();
+      if (count === 0 && SEEDS[name].length > 0) {
+        await col.insertMany(SEEDS[name]);
+      }
     }
     console.log('Storage: connected to MongoDB Atlas (persistent).');
   } else {
-    if (!fs.existsSync(DATA_FILE)) {
-      fs.mkdirSync(path.dirname(DATA_FILE), { recursive: true });
-      fs.writeFileSync(DATA_FILE, JSON.stringify(SEED_DATA, null, 2));
+    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+    for (const name of Object.keys(SEEDS)) {
+      const file = dataFile(name);
+      if (!fs.existsSync(file)) {
+        fs.writeFileSync(file, JSON.stringify(SEEDS[name], null, 2));
+      }
     }
-    console.log('Storage: using local JSON file (data resets on host restart - fine for local testing only).');
+    console.log('Storage: using local JSON files (data resets on host restart - fine for local testing only).');
   }
 }
 
 // ---------- local JSON helpers ----------
-function readJSON() {
+function readJSON(name) {
   try {
-    return JSON.parse(fs.readFileSync(DATA_FILE, 'utf-8'));
+    return JSON.parse(fs.readFileSync(dataFile(name), 'utf-8'));
   } catch (err) {
     return [];
   }
 }
-function writeJSON(list) {
-  fs.writeFileSync(DATA_FILE, JSON.stringify(list, null, 2), 'utf-8');
+function writeJSON(name, list) {
+  fs.writeFileSync(dataFile(name), JSON.stringify(list, null, 2), 'utf-8');
 }
 
-// ---------- public API (used by server.js) ----------
-async function getAll() {
-  if (mongoCollection) {
-    return mongoCollection.find({}).toArray();
+// ---------- generic collection API (used by server.js) ----------
+// `name` is the collection name, e.g. 'testimonials' or 'leads'
+async function getAll(name) {
+  if (mongoDb) {
+    return collections[name].find({}).toArray();
   }
-  return readJSON();
+  return readJSON(name);
 }
 
-async function addTestimonial(entry) {
-  if (mongoCollection) {
-    await mongoCollection.insertOne(entry);
+async function addItem(name, entry) {
+  if (mongoDb) {
+    await collections[name].insertOne(entry);
   } else {
-    const list = readJSON();
+    const list = readJSON(name);
     list.push(entry);
-    writeJSON(list);
+    writeJSON(name, list);
   }
 }
 
-async function setStatus(id, status) {
-  if (mongoCollection) {
-    const result = await mongoCollection.updateOne({ id }, { $set: { status } });
+async function setStatus(name, id, status) {
+  if (mongoDb) {
+    const result = await collections[name].updateOne({ id }, { $set: { status } });
     return result.matchedCount > 0;
   }
-  const list = readJSON();
+  const list = readJSON(name);
   const entry = list.find(t => t.id === id);
   if (!entry) return false;
   entry.status = status;
-  writeJSON(list);
+  writeJSON(name, list);
   return true;
 }
 
-async function deleteTestimonial(id) {
-  if (mongoCollection) {
-    await mongoCollection.deleteOne({ id });
+async function deleteItem(name, id) {
+  if (mongoDb) {
+    await collections[name].deleteOne({ id });
     return;
   }
-  const list = readJSON().filter(t => t.id !== id);
-  writeJSON(list);
+  const list = readJSON(name).filter(t => t.id !== id);
+  writeJSON(name, list);
 }
 
-module.exports = { initStorage, getAll, addTestimonial, setStatus, deleteTestimonial };
+module.exports = { initStorage, getAll, addItem, setStatus, deleteItem };
