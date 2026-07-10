@@ -256,19 +256,42 @@
     });
   }
 
-  // Contact form -> WhatsApp
-  document.getElementById('quoteForm').addEventListener('submit', function(e){
-    e.preventDefault();
-    const name = document.getElementById('f-name').value;
-    const phone = document.getElementById('f-phone').value;
-    const email = document.getElementById('f-email').value;
-    const city = document.getElementById('f-city').value;
-    const service = document.getElementById('f-service').value;
-    const message = document.getElementById('f-message').value;
-    let text = `Hi PSP, I'd like a free solar consultation.%0AName: ${encodeURIComponent(name)}%0APhone: ${encodeURIComponent(phone)}`;
-    if(email) text += `%0AEmail: ${encodeURIComponent(email)}`;
-    if(city) text += `%0ACity: ${encodeURIComponent(city)}`;
-    if(service) text += `%0AService: ${encodeURIComponent(service)}`;
-    if(message) text += `%0AMessage: ${encodeURIComponent(message)}`;
-    window.open(`https://wa.me/917895531049?text=${text}`, '_blank');
-  });
+  // Contact form -> submit directly to backend (saves as a lead + emails admin, no WhatsApp redirect)
+  const quoteForm = document.getElementById('quoteForm');
+  if(quoteForm){
+    quoteForm.addEventListener('submit', async function(e){
+      e.preventDefault();
+      const submitBtn = quoteForm.querySelector('.submit-btn');
+      const name = document.getElementById('f-name').value.trim();
+      const phone = document.getElementById('f-phone').value.trim();
+      const email = document.getElementById('f-email').value.trim();
+      const city = document.getElementById('f-city').value.trim();
+      const service = document.getElementById('f-service').value;
+      const message = document.getElementById('f-message').value.trim();
+
+      if(!name || !phone) return;
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Sending...';
+
+      try{
+        const res = await fetch('/api/leads', {
+          method:'POST',
+          headers:{ 'Content-Type':'application/json' },
+          body: JSON.stringify({ name, phone, email, city, service, message })
+        });
+        if(!res.ok) throw new Error('Submit failed');
+
+        quoteForm.innerHTML = `
+          <div class="testi-thankyou">
+            <div class="testi-thankyou-icon">✓</div>
+            <h4>Thank you, ${escapeHTML(name)}!</h4>
+            <p>Your request has been received. Our team will contact you shortly at ${escapeHTML(phone)}.</p>
+          </div>`;
+      }catch(err){
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Request Free Consultation';
+        alert('Something went wrong. Please try again or call us directly at +91 78955 31049.');
+      }
+    });
+  }
