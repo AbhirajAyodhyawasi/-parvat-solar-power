@@ -391,5 +391,222 @@
 </footer>
 
 <script src="script.js"></script>
+
+<!-- ============================================================
+     PSP AI CHATBOT WIDGET
+     ============================================================ -->
+
+<style>
+  :root {
+    --psp-chat-green: #1B4332;
+    --psp-chat-green-light: #2D6A4F;
+    --psp-chat-amber: #F4A340;
+    --psp-chat-cream: #FFF8EE;
+  }
+
+  #psp-chat-bubble {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--psp-chat-amber), #E8912A);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.25);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 9999;
+    transition: transform 0.2s ease;
+    border: none;
+  }
+  #psp-chat-bubble:hover { transform: scale(1.08); }
+  #psp-chat-bubble svg { width: 28px; height: 28px; fill: #1B4332; }
+
+  #psp-chat-window {
+    position: fixed;
+    bottom: 96px;
+    right: 24px;
+    width: 360px;
+    max-width: calc(100vw - 32px);
+    height: 520px;
+    max-height: calc(100vh - 140px);
+    background: var(--psp-chat-cream);
+    border-radius: 16px;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.3);
+    display: none;
+    flex-direction: column;
+    overflow: hidden;
+    z-index: 9999;
+    font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  #psp-chat-window.open { display: flex; }
+
+  #psp-chat-header {
+    background: var(--psp-chat-green);
+    color: white;
+    padding: 16px 18px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  #psp-chat-header .title { font-weight: 600; font-size: 15px; }
+  #psp-chat-header .subtitle { font-size: 12px; opacity: 0.8; margin-top: 2px; }
+  #psp-chat-close {
+    background: none; border: none; color: white; font-size: 20px;
+    cursor: pointer; line-height: 1; opacity: 0.8;
+  }
+  #psp-chat-close:hover { opacity: 1; }
+
+  #psp-chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .psp-msg {
+    max-width: 80%;
+    padding: 10px 14px;
+    border-radius: 14px;
+    font-size: 14px;
+    line-height: 1.4;
+    white-space: pre-wrap;
+  }
+  .psp-msg.bot {
+    background: white;
+    color: #1a1a1a;
+    align-self: flex-start;
+    border-bottom-left-radius: 4px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+  }
+  .psp-msg.user {
+    background: var(--psp-chat-green-light);
+    color: white;
+    align-self: flex-end;
+    border-bottom-right-radius: 4px;
+  }
+  .psp-msg.typing { color: #888; font-style: italic; }
+
+  #psp-chat-input-row {
+    display: flex;
+    padding: 12px;
+    gap: 8px;
+    border-top: 1px solid #e5ddd0;
+    background: white;
+  }
+  #psp-chat-input {
+    flex: 1;
+    border: 1px solid #ddd;
+    border-radius: 20px;
+    padding: 10px 16px;
+    font-size: 14px;
+    outline: none;
+  }
+  #psp-chat-input:focus { border-color: var(--psp-chat-amber); }
+  #psp-chat-send {
+    background: var(--psp-chat-amber);
+    border: none;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  #psp-chat-send svg { width: 18px; height: 18px; fill: var(--psp-chat-green); }
+</style>
+
+<button id="psp-chat-bubble" aria-label="Chat with us">
+  <svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>
+</button>
+
+<div id="psp-chat-window">
+  <div id="psp-chat-header">
+    <div>
+      <div class="title">Parvat Solar Power</div>
+      <div class="subtitle">Ask us anything about solar</div>
+    </div>
+    <button id="psp-chat-close" aria-label="Close chat">✕</button>
+  </div>
+  <div id="psp-chat-messages"></div>
+  <div id="psp-chat-input-row">
+    <input id="psp-chat-input" type="text" placeholder="Type your message..." autocomplete="off" />
+    <button id="psp-chat-send" aria-label="Send">
+      <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+    </button>
+  </div>
+</div>
+
+<script>
+(function () {
+  const bubble = document.getElementById('psp-chat-bubble');
+  const win = document.getElementById('psp-chat-window');
+  const closeBtn = document.getElementById('psp-chat-close');
+  const messagesEl = document.getElementById('psp-chat-messages');
+  const input = document.getElementById('psp-chat-input');
+  const sendBtn = document.getElementById('psp-chat-send');
+
+  // conversation history sent to the backend on every turn
+  let history = [];
+
+  function addMessage(role, text) {
+    const div = document.createElement('div');
+    div.className = 'psp-msg ' + (role === 'user' ? 'user' : 'bot');
+    div.textContent = text;
+    messagesEl.appendChild(div);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+    return div;
+  }
+
+  function openChat() {
+    win.classList.add('open');
+    if (history.length === 0) {
+      addMessage('bot', "Namaste! 🙏 Main PSP ka assistant hu. Solar installation, pricing, subsidy — kuch bhi pooch sakte ho. Aap kis city me ho?");
+    }
+    input.focus();
+  }
+
+  bubble.addEventListener('click', openChat);
+  closeBtn.addEventListener('click', () => win.classList.remove('open'));
+
+  async function sendMessage() {
+    const text = input.value.trim();
+    if (!text) return;
+    input.value = '';
+    addMessage('user', text);
+    history.push({ role: 'user', content: text });
+
+    const typingEl = addMessage('bot', 'typing...');
+    typingEl.classList.add('typing');
+
+    try {
+      const res = await fetch('/api/chatbot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ history })
+      });
+      const data = await res.json();
+      typingEl.remove();
+      addMessage('bot', data.reply);
+      history.push({ role: 'assistant', content: data.reply });
+    } catch (err) {
+      typingEl.remove();
+      addMessage('bot', 'Sorry, something went wrong. Please call us at +91 78955 31049.');
+    }
+  }
+
+  sendBtn.addEventListener('click', sendMessage);
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') sendMessage();
+  });
+})();
+</script>
+
 </body>
 </html>
