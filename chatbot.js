@@ -17,12 +17,12 @@
 const express = require('express');
 const router = express.Router();
 
-// Reuse your existing mailer - adjust the path/import if your
-// mailer.js exports things differently (e.g. { sendMail } vs default export)
+// Reuse your existing mailer.js - it exports sendLeadNotification(lead)
+// and reads ADMIN_EMAIL / EMAIL_USER / EMAIL_PASS from environment
+// variables on its own, so nothing else needs to be configured here.
 const mailer = require('./mailer');
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
-const LEAD_NOTIFY_EMAIL = process.env.LEAD_NOTIFY_EMAIL || 'info@parvatsolarpower.in';
 
 const SYSTEM_PROMPT = `
 You are the friendly customer-enquiry assistant for Parvat Solar Power (PSP),
@@ -119,38 +119,18 @@ router.post('/', async (req, res) => {
 });
 
 async function sendLeadEmail(lead) {
-  const subject = `New Chatbot Lead: ${lead.name || 'Unknown'}`;
-  const text = `
-New lead captured by the website chatbot:
-
-Name:    ${lead.name || '-'}
-Phone:   ${lead.phone || '-'}
-Service: ${lead.service || '-'}
-
-Follow up with this customer soon.
-  `.trim();
-
-  // Adjust this call to match how your existing mailer.js is written.
-  // Common patterns look like one of these two - keep whichever matches:
-  //
-  // Option A: mailer.js exports a function
-  //   await mailer.sendMail({ to: LEAD_NOTIFY_EMAIL, subject, text });
-  //
-  // Option B: mailer.js exports a configured nodemailer transporter
-  //   await mailer.sendMail({
-  //     from: process.env.SMTP_FROM,
-  //     to: LEAD_NOTIFY_EMAIL,
-  //     subject,
-  //     text
-  //   });
-
-  await mailer.sendMail({
-    to: LEAD_NOTIFY_EMAIL,
-    subject,
-    text
+  // Matches the shape mailer.js's sendLeadNotification() expects.
+  await mailer.sendLeadNotification({
+    name: lead.name || 'Not provided',
+    phone: lead.phone || 'Not provided',
+    email: lead.email || null,
+    city: lead.city || null,
+    service: lead.service || null,
+    message: 'Captured automatically via the website chatbot.',
+    createdAt: new Date().toISOString()
   });
 
-  console.log('Lead email sent:', lead);
+  console.log('Lead email sent via mailer.js:', lead);
 }
 
 module.exports = router;
