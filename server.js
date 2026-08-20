@@ -3,6 +3,8 @@ const path = require('path');
 const crypto = require('crypto');
 const storage = require('./storage');
 const mailer = require('./mailer');
+const chatbotRouter = require('./chatbot');
+app.use('/api/chatbot', chatbotRouter);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
