@@ -4,7 +4,6 @@ const crypto = require('crypto');
 const storage = require('./storage');
 const mailer = require('./mailer');
 const chatbotRouter = require('./chatbot');
-app.use('/api/chatbot', chatbotRouter);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -15,6 +14,7 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'changeme123';
 
 app.use(express.json());
 app.use(express.static(__dirname));
+app.use('/api/chatbot', chatbotRouter);
 
 function checkAdminAuth(req, res, next) {
   const password = req.headers['x-admin-password'] || req.query.password;
