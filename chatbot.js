@@ -10,8 +10,9 @@
 //   3. Make sure server.js uses express.json() middleware (it
 //      likely already does, since your quote form posts JSON too):
 //        app.use(express.json());
-//   4. Set your Anthropic API key as an environment variable
-//      (see instructions below) - never hardcode it in the file.
+//   4. Set your Gemini API key as an environment variable named
+//      GEMINI_API_KEY (see instructions below) - never hardcode it
+//      in the file.
 // ============================================================
 
 const express = require('express');
@@ -22,7 +23,11 @@ const router = express.Router();
 // variables on its own, so nothing else needs to be configured here.
 const mailer = require('./mailer');
 
-const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
+// Using Google Gemini's free tier instead of a paid API.
+// Get a free key at https://aistudio.google.com/app/apikey
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const GEMINI_MODEL = 'gemini-2.0-flash';
+const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
 
 const SYSTEM_PROMPT = `
 You are the friendly customer-enquiry assistant for Parvat Solar Power (PSP),
@@ -73,29 +78,33 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Missing conversation history' });
     }
 
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    // Gemini expects roles as "user" / "model" (not "assistant"),
+    // and each message's text wrapped in a "parts" array.
+    const geminiContents = history.map(m => ({
+      role: m.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: m.content }]
+    }));
+
+    const response = await fetch(GEMINI_URL, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01'
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 400,
-        system: SYSTEM_PROMPT,
-        messages: history.map(m => ({ role: m.role, content: m.content }))
+        systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+        contents: geminiContents,
+        generationConfig: { maxOutputTokens: 400 }
       })
     });
 
     const data = await response.json();
 
-    if (!data.content || !data.content[0]) {
+    const candidateText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+
+    if (!candidateText) {
       console.error('Unexpected AI response:', JSON.stringify(data));
       return res.status(500).json({ reply: 'Sorry, something went wrong. Please call us at +91 78955 31049.' });
     }
 
-    let reply = data.content.map(block => block.text || '').join('');
+    let reply = candidateText;
 
     // Check for the lead-capture tag and strip it from what the user sees
     const leadMatch = reply.match(/<<LEAD>>([\s\S]*?)<<LEAD>>/);
